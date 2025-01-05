@@ -124,7 +124,8 @@ func option() *Config {
 	}
 
 	if apiKey == "" && cookie == "" {
-		_, _ = fmt.Fprintf(os.Stderr, "Cookie and Api key not found ")
+		_, _ = fmt.Fprintf(os.Stderr, "Cookie and Api key not found\n")
+		flag.PrintDefaults()
 		os.Exit(0)
 	}
 
@@ -140,7 +141,7 @@ func option() *Config {
 }
 
 func run(cfg *Config, checker *DNSChecker, api *CloudflareAPI) {
-	fmt.Println("Checking for DNS changes...")
+	cfg.printDebug(false, "Checking for DNS changes...")
 
 	currentRecords, err := api.ListDNSRecords(cfg.ZoneId)
 	if err != nil {
@@ -155,14 +156,12 @@ func run(cfg *Config, checker *DNSChecker, api *CloudflareAPI) {
 	notChange, added, removed := checker.DetectChanges(currentRecords, previousRecords)
 
 	if len(added) > 0 || len(removed) > 0 || len(notChange) > 0 {
-		fmt.Printf("Changes detected! Added: %d, Removed: %d\n", len(added), len(removed))
-
 		for _, record := range notChange {
-			fmt.Printf("Not Change: %s\t%s\t%s\n", record.Name, record.Type, record.Content)
+			fmt.Printf("%s\t%s\t%s\n", record.Name, record.Type, record.Content)
 		}
 
 		for _, record := range added {
-			fmt.Printf("Added: %s\t%s\t%s\n", record.Name, record.Type, record.Content)
+			fmt.Printf("New: %s\t%s\t%s\n", record.Name, record.Type, record.Content)
 		}
 
 		for _, record := range removed {
@@ -202,7 +201,7 @@ func main() {
 		for _, z := range zones {
 			fmt.Printf("[%s] %s\n", z.ID, z.Name)
 		}
-		fmt.Printf("Picked the zone: [%s]%s\n", zones[cfg.ZoneNo].ID, zones[cfg.ZoneNo].Name)
+		fmt.Printf("Picked the zone: [%s] %s\n", zones[cfg.ZoneNo].ID, zones[cfg.ZoneNo].Name)
 	}
 
 	checker := NewDNSChecker(cfg.StoragePath, cfg.ZoneId)
