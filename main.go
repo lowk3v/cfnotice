@@ -74,6 +74,7 @@ type Config struct {
 	StoragePath     string
 	ZoneId          string
 	ZoneNo          int
+	Filter          int8
 	Debug           bool
 }
 
@@ -87,6 +88,21 @@ func (c *Config) printDebug(isError bool, msg string) {
 		fmt.Println(msg)
 	}
 }
+
+func printList(label string, list []DNSRecord) {
+	if label != "" {
+		label = label + ": "
+	}
+	for _, r := range list {
+		fmt.Printf("%s%s\t%s\t%s\n", label, r.Name, r.Type, r.Content)
+	}
+}
+
+const (
+	FilterAll      int8 = 2
+	FilterChange   int8 = 1
+	FilterNoChange int8 = 0
+)
 
 func option() *Config {
 	var storagePath string
@@ -107,6 +123,9 @@ func option() *Config {
 
 	var apiKey string
 	flag.StringVar(&apiKey, "k", os.Getenv("CF_API_KEY"), "an API Key of your Cloudflare access. Default is empty")
+
+	var filter int
+	flag.IntVar(&filter, "f", 2, "filter dns ( 0 for no-change | 1 for change | 2 for all ). Default is all")
 
 	var debug bool
 	flag.BoolVar(&debug, "debug", false, "Enable debugging. Default is false")
@@ -136,6 +155,7 @@ func option() *Config {
 		StoragePath:     storagePath,
 		ZoneId:          zoneId,
 		ZoneNo:          zoneNo,
+		Filter:          int8(filter),
 		Debug:           debug,
 	}
 }
@@ -156,16 +176,17 @@ func run(cfg *Config, checker *DNSChecker, api *CloudflareAPI) {
 	notChange, added, removed := checker.DetectChanges(currentRecords, previousRecords)
 
 	if len(added) > 0 || len(removed) > 0 || len(notChange) > 0 {
-		for _, record := range notChange {
-			fmt.Printf("%s\t%s\t%s\n", record.Name, record.Type, record.Content)
-		}
 
-		for _, record := range added {
-			fmt.Printf("New: %s\t%s\t%s\n", record.Name, record.Type, record.Content)
-		}
-
-		for _, record := range removed {
-			fmt.Printf("Removed: %s\t%s\t%s\n", record.Name, record.Type, record.Content)
+		switch cfg.Filter {
+		case FilterChange:
+			printList("", removed)
+			printList("", added)
+		case FilterNoChange:
+			printList("", notChange)
+		case FilterAll:
+			printList("No change", notChange)
+			printList("New", added)
+			printList("Removed", removed)
 		}
 
 		err := checker.SaveRecords(cfg.ZoneId, currentRecords)
@@ -197,11 +218,11 @@ func main() {
 		}
 		cfg.ZoneId = zones[cfg.ZoneNo].ID
 
-		fmt.Println("All available zones:")
+		cfg.printDebug(false, "All available zones:")
 		for _, z := range zones {
-			fmt.Printf("[%s] %s\n", z.ID, z.Name)
+			cfg.printDebug(false, fmt.Sprintf("[%s] %s\n", z.ID, z.Name))
 		}
-		fmt.Printf("Picked the zone: [%s] %s\n", zones[cfg.ZoneNo].ID, zones[cfg.ZoneNo].Name)
+		cfg.printDebug(false, fmt.Sprintf("Picked the zone: [%s] %s\n", zones[cfg.ZoneNo].ID, zones[cfg.ZoneNo].Name))
 	}
 
 	checker := NewDNSChecker(cfg.StoragePath, cfg.ZoneId)
